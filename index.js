@@ -3,22 +3,17 @@ const admin = require("firebase-admin");
 
 admin.initializeApp();
 const db = admin.firestore();
-const auth = admin.auth();
+// const auth = admin.auth(); // 🔒 Auth disabled for testing
 
-// Create an HTTP server explicitly
 const http = require('http');
 const server = http.createServer(async (req, res) => {
-  // Handle CORS if needed
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
-  if (req.method === 'OPTIONS') {
-    return res.end();
-  }
+  if (req.method === 'OPTIONS') return res.end();
 
-  // Your existing function logic
-  if (req.url === '/userConfig' || req.url === '/userConfig/') {
+  if (req.url.startsWith('/userConfig')) {
     return await handleUserConfigRequest(req, res);
   }
 
@@ -26,8 +21,9 @@ const server = http.createServer(async (req, res) => {
   res.end('Not Found');
 });
 
-// Move your existing logic to a separate function
 async function handleUserConfigRequest(req, res) {
+  // 🔒 Authentication temporarily disabled
+  /*
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     return res.status(401).json({ error: "Missing or invalid Authorization header" });
@@ -43,8 +39,11 @@ async function handleUserConfigRequest(req, res) {
     console.error("Auth error:", err);
     return res.status(401).json({ error: "Invalid or expired token" });
   }
+  */
 
-  // Parse request body for POST/PATCH methods
+  // 🔧 For testing purposes
+  const uid = "TEST_UID"; // Replace with actual UID in production
+
   let body = '';
   if (req.method === 'POST' || req.method === 'PATCH') {
     body = await new Promise((resolve) => {
@@ -56,7 +55,7 @@ async function handleUserConfigRequest(req, res) {
 
   const role = req.url.split('?')[1]?.split('&').find(p => p.startsWith('role='))?.split('=')[1] || 
                (body ? JSON.parse(body).role : null);
-  
+
   if (!role) return res.status(400).json({ error: "Missing 'role' in query or body." });
 
   const docRef = db.collection(role).doc(uid);
@@ -103,14 +102,11 @@ async function handleUserConfigRequest(req, res) {
   }
 }
 
-// Start the server on the correct port
 const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
 
-// Export the server as a Cloud Function
 exports.userConfig = functions.https.onRequest(async (req, res) => {
-  // This will still work for Firebase Functions
   await handleUserConfigRequest(req, res);
 });
