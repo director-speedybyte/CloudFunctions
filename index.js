@@ -114,5 +114,5 @@ console.log(Server running on port ${PORT});
 exports.userConfig = functions.https.onRequest(async (req, res) => {
 // This will still work for Firebase Functions
 await handleUserConfigRequest(req, res);
-});in this function comment the auth part and label it for now and give me rest api payload for this function
+});
 
