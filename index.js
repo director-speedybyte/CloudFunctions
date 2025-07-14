@@ -5,7 +5,29 @@ admin.initializeApp();
 const db = admin.firestore();
 const auth = admin.auth();
 
-exports.userConfig = functions.https.onRequest(async (req, res) => {
+// Create an HTTP server explicitly
+const http = require('http');
+const server = http.createServer(async (req, res) => {
+  // Handle CORS if needed
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+  if (req.method === 'OPTIONS') {
+    return res.end();
+  }
+
+  // Your existing function logic
+  if (req.url === '/userConfig' || req.url === '/userConfig/') {
+    return await handleUserConfigRequest(req, res);
+  }
+
+  res.statusCode = 404;
+  res.end('Not Found');
+});
+
+// Move your existing logic to a separate function
+async function handleUserConfigRequest(req, res) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     return res.status(401).json({ error: "Missing or invalid Authorization header" });
@@ -22,14 +44,26 @@ exports.userConfig = functions.https.onRequest(async (req, res) => {
     return res.status(401).json({ error: "Invalid or expired token" });
   }
 
-  const role = req.query.role || req.body.role;
+  // Parse request body for POST/PATCH methods
+  let body = '';
+  if (req.method === 'POST' || req.method === 'PATCH') {
+    body = await new Promise((resolve) => {
+      let data = '';
+      req.on('data', chunk => data += chunk);
+      req.on('end', () => resolve(data));
+    });
+  }
+
+  const role = req.url.split('?')[1]?.split('&').find(p => p.startsWith('role='))?.split('=')[1] || 
+               (body ? JSON.parse(body).role : null);
+  
   if (!role) return res.status(400).json({ error: "Missing 'role' in query or body." });
 
   const docRef = db.collection(role).doc(uid);
 
   try {
     if (req.method === "POST") {
-      const { firstName, lastName, phoneNumber, email, password } = req.body;
+      const { firstName, lastName, phoneNumber, email, password } = JSON.parse(body);
       const data = {
         firstName,
         lastName,
@@ -46,7 +80,7 @@ exports.userConfig = functions.https.onRequest(async (req, res) => {
       return res.status(200).json(snapshot.data());
 
     } else if (req.method === "PATCH") {
-      const { firstName, lastName, phoneNumber, email, password } = req.body;
+      const { firstName, lastName, phoneNumber, email, password } = JSON.parse(body);
       const updateData = {
         ...(firstName && { firstName }),
         ...(lastName && { lastName }),
@@ -67,4 +101,16 @@ exports.userConfig = functions.https.onRequest(async (req, res) => {
     console.error("Firestore Error:", error);
     return res.status(500).json({ error: "Operation failed." });
   }
+}
+
+// Start the server on the correct port
+const PORT = process.env.PORT || 8080;
+server.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
+
+// Export the server as a Cloud Function
+exports.userConfig = functions.https.onRequest(async (req, res) => {
+  // This will still work for Firebase Functions
+  await handleUserConfigRequest(req, res);
 });
